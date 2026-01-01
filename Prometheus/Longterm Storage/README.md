@@ -1,291 +1,237 @@
-# Prometheus in Kubernetes – 
----
-
-## High-Level Idea (One Line)
-
-> In Kubernetes, Prometheus runs as a **centralized monitoring service** that dynamically discovers cluster components, scrapes their metrics, stores them as time-series data, and triggers alerts via Alertmanager.
+# Prometheus Long-Term Storage – 
 
 ---
 
-## Why Prometheus is Needed in Kubernetes
+## Why Long-Term Storage is Needed in Prometheus
 
-Kubernetes is:
+By default, Prometheus:
 
-* Dynamic (pods scale up/down)
-* Ephemeral (pods restart, IPs change)
-* Distributed (many nodes and services)
+* Stores metrics **locally on disk**
+* Uses its internal **TSDB (Time Series Database)**
 
-Traditional monitoring fails here.
+This is good for:
 
-Prometheus works because it:
+* Short-term monitoring
+* Fast queries
 
-* Uses **service discovery**
-* Uses **labels instead of fixed hosts**
-* Is **cloud-native by design**
+But it is **not enough for production**.
 
 ---
 
-## How Prometheus is Deployed in Kubernetes
+## Limitations of Default Prometheus Storage
 
-### 1️⃣ Prometheus Runs as a Pod
+Prometheus TSDB has these limitations:
 
-In production, Prometheus runs as:
+1. **Single-node storage**
 
-* A **Deployment** or **StatefulSet**
-* Usually **1 replica** (small/medium clusters)
-* **2 replicas** for HA (large clusters)
+   * Data is stored only on the Prometheus pod
 
-Important:
+2. **Limited retention**
 
-* Prometheus is **NOT** a DaemonSet
-* It does **NOT** run on every node
+   * Usually 7–15 days
+   * Increasing retention increases disk & memory usage
 
-Kubernetes schedules the Prometheus pod on **any available node**.
+3. **No global view**
 
----
+   * Cannot easily query metrics across multiple clusters
 
-## Core Components Deployed in Kubernetes
+4. **No built-in high availability**
 
-A typical production setup deploys:
+   * If Prometheus pod is lost, data may be lost
 
-### 1. Prometheus Server
+Because of this:
 
-* Central metrics scraper
-* Stores metrics in local TSDB
-* Evaluates alert & recording rules
+> **Prometheus alone is not suitable for long-term metrics retention.**
 
 ---
 
-### 2. Node Exporter (DaemonSet)
+## What is Long-Term Storage?
 
-* Runs on **every node**
-* Exposes OS-level metrics
-* Example metrics:
+Long-term storage means:
 
-  * CPU
-  * Memory
-  * Disk
-
----
-
-### 3. kube-state-metrics (Deployment)
-
-* Exposes Kubernetes object state
-* Examples:
-
-  * Pod status
-  * Deployment replicas
-  * Node conditions
-
-Important:
-
-* Does NOT expose CPU/memory
+* Storing metrics for **months or years**
+* Storing metrics **outside Prometheus**
+* Enabling **global queries**
+* Supporting **high availability**
 
 ---
 
-### 4. cAdvisor (Kubelet-integrated)
+## How Prometheus Achieves Long-Term Storage
 
-* Exposes container-level metrics
-* Used for pod & container resource usage
+Prometheus uses an **external system** for long-term storage.
 
----
+Prometheus:
 
-### 5. Alertmanager
-
-* Runs as a separate Deployment
-* Handles alert routing, grouping, silencing
-
----
-
-### 6. Grafana (Optional but Common)
-
-* Visualizes metrics
-* Queries Prometheus using PromQL
-
----
-
-## How Prometheus Discovers Targets in Kubernetes
-
-Prometheus uses **Kubernetes Service Discovery**.
-
-It talks to:
-
-* Kubernetes API Server
-
-It discovers:
-
-* Nodes
-* Pods
-* Services
-* Endpoints
+* Still scrapes metrics
+* Still evaluates rules
+* **Ships metrics to remote storage**
 
 This is done using:
 
-* `kubernetes_sd_configs`
+* `remote_write`
+* `remote_read`
 
 ---
 
-## Target Selection (Very Important)
+## Common Long-Term Storage Solutions
 
-Prometheus initially discovers **everything**.
+### 1️⃣ Thanos (MOST COMMON)
 
-In production, we **filter targets** using:
+Used when:
 
-* Target relabeling
+* Kubernetes clusters
+* Need HA Prometheus
+* Need S3-based storage
 
-Example logic:
+Key features:
 
-* Scrape only pods with specific annotations
-* Ignore system or test namespaces
-
-This prevents overload.
-
----
-
-## Scraping Metrics (How Data is Collected)
-
-1. Targets expose `/metrics`
-2. Prometheus pulls metrics at `scrape_interval`
-3. Metrics are collected over HTTP/HTTPS
-
-Important:
-
-* Prometheus always scrapes **all metrics exposed** by a target
+* Uses object storage (S3, GCS, Azure Blob)
+* Enables querying across clusters
+* Supports HA Prometheus
 
 ---
 
-## Storage in Kubernetes (TSDB)
+### 2️⃣ Cortex / Mimir
 
-Prometheus stores data:
+Used when:
 
-* Locally on disk
-* As time-series blocks
+* Very large scale
+* Multi-tenant environments
+* SaaS monitoring platforms
 
-In Kubernetes:
+Key features:
 
-* Uses **PersistentVolume (PV/PVC)**
-
-Without PVC:
-
-* Metrics are lost on pod restart
-
----
-
-## Alerting in Kubernetes
-
-### Alert Evaluation
-
-* Prometheus evaluates alert rules internally
-* Uses PromQL expressions
-
-### Alert Delivery
-
-* Alerts are sent to Alertmanager
-* Alertmanager routes alerts to:
-
-  * Slack
-  * Email
-  * PagerDuty
-
-Prometheus never sends notifications directly.
+* Horizontally scalable
+* Multi-tenant
+* Very high ingestion rate
 
 ---
 
-## Security in Production Kubernetes
+### 3️⃣ VictoriaMetrics
 
-Prometheus uses:
+Used when:
 
-* Kubernetes ServiceAccount
-* RBAC permissions
+* Simpler setup is needed
+* High performance is required
 
-RBAC controls:
+Key features:
 
-* Which resources Prometheus can read
-
-TLS is used for:
-
-* Secure scraping
-* Secure API communication
+* Single binary option
+* Low resource usage
 
 ---
 
-## High Availability (HA) Setup
+## Thanos Architecture (Production Standard)
 
-For large clusters:
+In production, Thanos is the **most commonly used** solution.
 
-* Run **2 Prometheus replicas**
-* Both scrape same targets
-* Alertmanager deduplicates alerts
+Components:
 
-For long-term storage:
+### Thanos Sidecar
 
-* Thanos or Cortex is added
+* Runs alongside Prometheus
+* Uploads TSDB blocks to object storage
 
----
+### Object Storage
 
-## Common Production Installation Method
+* S3 / GCS / Azure Blob
+* Stores metrics for long term
 
-Most companies use:
+### Thanos Query
 
-* **kube-prometheus-stack (Helm)**
+* Provides a global query layer
+* Combines data from multiple Prometheus instances
 
-It installs:
+### Thanos Store Gateway
 
-* Prometheus
-* Alertmanager
-* Grafana
-* Exporters
-* Prebuilt dashboards
+* Reads historical data from object storage
 
 ---
 
-## Complete Production Workflow
+## How Data Flows (Thanos Example)
 
-```text
-Nodes / Pods / Apps
-   ↓
-Exporters expose /metrics
-   ↓
-Prometheus discovers targets via K8s API
-   ↓
-Target relabeling filters targets
-   ↓
-Prometheus scrapes metrics
-   ↓
-Metrics stored in TSDB (PVC)
-   ↓
-Alert rules evaluated
-   ↓
-Alerts sent to Alertmanager
-   ↓
-Notifications sent
-   ↓
-Grafana visualizes metrics
-```
+1. Prometheus scrapes metrics
+2. Metrics stored locally in TSDB
+3. Thanos sidecar uploads blocks to S3
+4. Store Gateway reads data from S3
+5. Thanos Query serves global queries
+
+Prometheus still handles **real-time data**.
 
 ---
 
-## What Prometheus Does NOT Do
+## Remote Write (Alternative Method)
 
-❌ Does not collect logs
-❌ Does not trace requests
-❌ Does not auto-scale itself
+Prometheus can push metrics directly to remote storage.
 
-Prometheus is **metrics-only**.
+Example use cases:
+
+* Cortex
+* Mimir
+* VictoriaMetrics
+
+Prometheus configuration includes:
+
+* `remote_write`
+
+This allows:
+
+* Near real-time ingestion
+* External long-term retention
+
+---
+
+## Retention Strategy (Production)
+
+Typical production setup:
+
+* Prometheus local retention: 7–15 days
+* Long-term storage retention: 6 months – 2 years
+
+Reason:
+
+* Fast queries for recent data
+* Cheap storage for historical data
+
+---
+
+## Why We Still Keep Local Prometheus Storage
+
+Even with long-term storage:
+
+* Prometheus is faster for recent data
+* Alerts depend on local data
+* Reduces load on remote storage
+
+Long-term storage is **not a replacement**, it is an extension.
+
+---
+
+## Multi-Cluster Monitoring
+
+Long-term storage enables:
+
+* Central monitoring for many clusters
+* Global dashboards
+* Cross-cluster SLOs
+
+Without long-term storage:
+
+* Each cluster is isolated
 
 ---
 
 ## Common Interview Traps
 
-❌ "Prometheus runs on every node" → Wrong
-❌ "Prometheus pushes metrics" → Wrong
-❌ "kube-state-metrics gives CPU" → Wrong
+❌ "Prometheus itself stores data long-term" → Wrong
+❌ "Increasing retention is enough" → Wrong
+❌ "Thanos replaces Prometheus" → Wrong
 
 ---
 
 ## Interview One-Liner
 
-> In Kubernetes, Prometheus runs as a centralized service that uses Kubernetes service discovery to scrape metrics from nodes, pods, and applications, stores them as time-series data, and integrates with Alertmanager and Grafana for alerting and visualization.
+> Prometheus uses external systems like Thanos or Cortex for long-term storage by offloading metrics to object storage, enabling long retention, high availability, and global querying while keeping Prometheus focused on real-time monitoring.
 
 ---
 
