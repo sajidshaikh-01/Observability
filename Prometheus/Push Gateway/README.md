@@ -1,9 +1,5 @@
 # Prometheus Pushgateway – Complete Explanation 
-
-Pushgateway is a **small but very tricky topic** — many people misunderstand it in interviews.
-
 ---
-
 ## What is Pushgateway?
 
 Pushgateway is a **component used with Prometheus** that allows **short‑lived jobs** to **push metrics** instead of being scraped directly.
