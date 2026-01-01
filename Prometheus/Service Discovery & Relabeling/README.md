@@ -94,6 +94,8 @@ That is where **Relabeling** comes in.
 ---
 
 ## 2️⃣ What is Relabeling?
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/bc7ec36d-ae17-4bc1-850a-f624cab4099b" />
+
 
 ### Definition
 
