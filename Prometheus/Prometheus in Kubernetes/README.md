@@ -1,11 +1,5 @@
 # Prometheus in Kubernetes – How It Runs in Production
 
-This is written for:
-
-* Real-world Kubernetes operations
-* DevOps / SRE interviews
-* Clear mental model (no confusion)
-
 ---
 
 ## High-Level Idea (One Line)
