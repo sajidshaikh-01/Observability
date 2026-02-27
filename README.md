@@ -293,5 +293,5 @@ Typical production stack:
 
 > Observability is the ability to understand the internal state of a system using logs, metrics, and monitoring to detect issues, analyze behavior, and resolve problems efficiently.
 
----
+
 
